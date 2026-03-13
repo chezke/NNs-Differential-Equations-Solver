@@ -1,9 +1,12 @@
 import torch
 import torch.optim as optim
 from models import MLP
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objects as go
 
 # ==================================================
-# 1. 
+# 1. Training
 # ==================================================
 def NN_train(
         loss_function,
@@ -46,10 +49,214 @@ def NN_train(
     return tuple(models)
 
 
+# ====================================================================================================
+# 2. Visualization
+# ====================================================================================================
+# ====================================================================================================
+# 2.1 Plot: ODE solution and error
+# ====================================================================================================
+def plot_ode_solution(
+    x_min,
+    x_max,
+    approx_fun,
+    exact_fun,
+    num_points=100,
+    xlabel='x',
+    ylabel=r'$\Psi(x)$',
+    error_label='Error',
+    title=None,
+    is_coupled=False,
+    approx_fun_2=None,
+    exact_fun_2=None,
+):
+    x_t = torch.linspace(x_min, x_max, num_points, requires_grad=True).unsqueeze(1)
+
+    y_approx = approx_fun(x_t).detach().numpy().reshape(-1)
+    y_exact = exact_fun(x_t).detach().numpy().reshape(-1)
+    x = x_t.detach().numpy().reshape(-1)
+
+    # --------------------------------------------------
+    # Single ODE case
+    # --------------------------------------------------
+    if not is_coupled:
+        fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
+
+        ax1.plot(x, y_approx, label='NN Approximation')
+        ax1.plot(x, y_exact, label='Exact Solution')
+        ax1.legend()
+        ax1.set_ylabel(ylabel, fontsize=18)
+
+        ax2.plot(x, y_exact - y_approx, label='Residual')
+        ax2.legend()
+        ax2.set_xlabel(xlabel, fontsize=18)
+        ax2.set_ylabel(error_label, fontsize=18)
+
+    # --------------------------------------------------
+    # Coupled ODE case
+    # --------------------------------------------------
+    else:
+        if approx_fun_2 is None or exact_fun_2 is None:
+            raise ValueError("For coupled systems you must provide approx_fun_2 and exact_fun_2.")
+        y2_approx = approx_fun_2(x_t).detach().numpy().reshape(-1)
+        y2_exact = exact_fun_2(x_t).detach().numpy().reshape(-1)
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
+        # ψ1 solution
+        axes[0, 0].plot(x, y_approx, label='NN Approximation')
+        axes[0, 0].plot(x, y_exact, label='Exact Solution')
+        axes[0, 0].set_ylabel(r'$\Psi_1(x)$')
+        axes[0, 0].legend()
+        # ψ1 error
+        axes[1, 0].plot(x, y_exact - y_approx, label='Error')
+        axes[1, 0].set_xlabel(xlabel)
+        axes[1, 0].set_ylabel('Error')
+        axes[1, 0].legend()
+        # ψ2 solution
+        axes[0, 1].plot(x, y2_approx, label='NN Approximation')
+        axes[0, 1].plot(x, y2_exact, label='Exact Solution')
+        axes[0, 1].set_ylabel(r'$\Psi_2(x)$')
+        axes[0, 1].legend()
+        # ψ2 error
+        axes[1, 1].plot(x, y2_exact - y2_approx, label='Error')
+        axes[1, 1].set_xlabel(xlabel)
+        axes[1, 1].set_ylabel('Error')
+        axes[1, 1].legend()
+
+    if title is not None:
+        fig.suptitle(title, fontsize=14)
+
+    plt.tight_layout()
+    plt.show()
+
+
+# ====================================================================================================
+# 2.2 Plot: PDE solution and error
+# ====================================================================================================
+# ==================================================
+# Helper: build 2D grid
+# ==================================================
+def build_pde_grid(x_min=0, x_max=1, y_min=0, y_max=1, num_points=30):
+    x = np.linspace(x_min, x_max, num_points)
+    y = np.linspace(y_min, y_max, num_points)
+    X, Y = np.meshgrid(x, y)
+    return X, Y
+
 
 # ==================================================
-# 2. Loss Functions
+# Helper: evaluate trial solution on grid
 # ==================================================
+def evaluate_trial_solution_on_grid(trial_fun, N, X, Y):
+    xy_pairs = torch.tensor(
+        np.column_stack([X.ravel(), Y.ravel()]),
+        dtype=torch.float32
+    )
+
+    with torch.no_grad():
+        Z_trial = trial_fun(xy_pairs, N).cpu().numpy().reshape(X.shape)
+
+    return Z_trial
+
+
+# ==================================================
+# Plot: exact solution wireframe
+# ==================================================
+def plot_pde_exact_wireframe(
+    exact_fun,
+    num_points=30,
+    x_min=0, x_max=1,
+    y_min=0, y_max=1,
+    title='Exact solution',
+    elev=18,
+    azim=-58
+):
+    X, Y = build_pde_grid(x_min, x_max, y_min, y_max, num_points)
+    Z_exact = exact_fun(X, Y)
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_wireframe(X, Y, Z_exact, color='black', linewidth=0.8)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('Solution')
+    ax.set_title(title)
+    ax.view_init(elev=elev, azim=azim)
+
+    plt.show()
+
+
+# ==================================================
+# Plot: error wireframe
+# ==================================================
+def plot_pde_error_wireframe(
+    exact_fun,
+    trial_fun,
+    N,
+    num_points=10,
+    x_min=0, x_max=1,
+    y_min=0, y_max=1,
+    title='Solution Accuracy',
+    elev=18,
+    azim=-58
+):
+    X, Y = build_pde_grid(x_min, x_max, y_min, y_max, num_points)
+
+    Z_exact = exact_fun(X, Y)
+    Z_trial = evaluate_trial_solution_on_grid(trial_fun, N, X, Y)
+
+    error = Z_trial - Z_exact
+
+    print(f"{title} - max abs error: {np.max(np.abs(error)):.6e}")
+    print(f"{title} - Z_trial shape: {Z_trial.shape}")
+    print(f"{title} - error shape: {error.shape}")
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_wireframe(X, Y, error, color='black', linewidth=0.8)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('Solution Accuracy')
+    ax.set_title(title)
+    ax.view_init(elev=elev, azim=azim)
+
+    plt.show()
+
+
+# ==================================================
+# Plot: exact vs trial surface comparison
+# ==================================================
+def plot_pde_solution_comparison(
+    exact_fun,
+    trial_fun,
+    N,
+    num_points=30,
+    x_min=0, x_max=1,
+    y_min=0, y_max=1,
+    title='Exact vs trial solution'
+):
+    X, Y = build_pde_grid(x_min, x_max, y_min, y_max, num_points)
+
+    Z_exact = exact_fun(X, Y)
+    Z_trial = evaluate_trial_solution_on_grid(trial_fun, N, X, Y)
+
+    print(f"{title} - max abs error: {np.max(np.abs(Z_trial - Z_exact)):.6e}")
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.plot_surface(X, Y, Z_exact, cmap='viridis', alpha=0.8)
+    ax.plot_surface(X, Y, Z_trial, color='red', alpha=0.5)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('Solution')
+    ax.set_title(title)
+
+    plt.show()
+
+# ====================================================================================================
+# 3. Loss Functions
+# ====================================================================================================
 def first_order_loss_with_ic(neural_network, a, g, ic, domain_lower_bound=0, domain_upper_bound=1, num_points=10):
     """Computes loss for a given NN
 
