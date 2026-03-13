@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-import models as m
+import models as MLP
 
 def first_order_loss_with_ic(neural_network, a, g, ic, domain_lower_bound=0, domain_upper_bound=1, num_points=10):
     """Computes loss for a given NN
@@ -84,6 +84,40 @@ def second_order_loss_with_ic(neural_network, a, b, g, ic, ic_prime, domain_lowe
     individual_error = (d2trial_dx2 - (g(x) - a(x)*dtrial_dx - b(x)*trial_solution(x)))**2
     
     return torch.sum(individual_error)
+
+
+def coupled_first_order_system_loss_with_ic(
+    N1, N2, rhs1, rhs2,
+    domain_lower_bound=0.0,
+    domain_upper_bound=3.0,
+    num_points=100
+):
+    x = torch.linspace(domain_lower_bound, domain_upper_bound, num_points).unsqueeze(1)
+    x.requires_grad_(True)
+
+    # Trial solutions
+    psi1_t = x * N1(x)
+    psi2_t = 1 + x * N2(x)
+
+    # Derivatives
+    dpsi1_dx = torch.autograd.grad(
+        psi1_t, x,
+        grad_outputs=torch.ones_like(psi1_t),
+        create_graph=True
+    )[0]
+
+    dpsi2_dx = torch.autograd.grad(
+        psi2_t, x,
+        grad_outputs=torch.ones_like(psi2_t),
+        create_graph=True
+    )[0]
+
+    # Residuals
+    res1 = dpsi1_dx - rhs1(x, psi1_t, psi2_t)
+    res2 = dpsi2_dx - rhs2(x, psi1_t, psi2_t)
+
+    loss = torch.sum(res1**2) + torch.sum(res2**2)
+    return loss
 
 
 def second_order_pde_loss_with_bc(
