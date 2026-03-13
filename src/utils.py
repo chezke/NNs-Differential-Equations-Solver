@@ -1,7 +1,55 @@
 import torch
 import torch.optim as optim
-import models as MLP
+from models import MLP
 
+# ==================================================
+# 1. 
+# ==================================================
+def NN_train(
+        loss_function,
+        N=None,
+        models=None,
+        learning_rate=0.0005,
+        epochs=10000,
+        display_step=1000,
+        optimizer_class=optim.Adam,
+        **loss_kwargs):
+    
+    if models is None:
+        if N is None:
+            N = MLP()
+        models = [N]
+    else:
+        models = list(models)
+        if len(models) == 0:
+            raise ValueError("`models` must contain at least one model.")
+        if N is None and len(models) == 1:
+            N = models[0]
+
+    params = []
+    for model in models:
+        params.extend(list(model.parameters()))
+
+    optimizer = optimizer_class(params, lr=learning_rate)
+
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        loss = loss_function(*models, **loss_kwargs)
+        loss.backward()
+        optimizer.step()
+
+        if epoch % display_step == 0 or epoch == epochs - 1:
+            print(f"Epoch {epoch}, Loss: {loss.item():.6f}")
+
+    if len(models) == 1:
+        return models[0]
+    return tuple(models)
+
+
+
+# ==================================================
+# 2. Loss Functions
+# ==================================================
 def first_order_loss_with_ic(neural_network, a, g, ic, domain_lower_bound=0, domain_upper_bound=1, num_points=10):
     """Computes loss for a given NN
 
