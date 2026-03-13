@@ -41,6 +41,7 @@ def first_order_loss_with_ic(neural_network, a, g, ic, domain_lower_bound=0, dom
 
     return torch.sum(individual_error)
 
+
 def second_order_loss_with_ic(neural_network, a, b, g, ic, ic_prime, domain_lower_bound=0, domain_upper_bound=1, num_points=10):
     """Computes loss for a given NN
 
@@ -121,5 +122,110 @@ def second_order_pde_loss_with_bc(
     # Calculate the individual error at each grid point
     individual_error = (laplacian - torch.exp(-X_flat) * (X_flat - 2 + Y_flat**3 + 6 * Y_flat))**2
     
+    # Sum the errors to get the total loss
+    return torch.sum(individual_error)
+
+
+def second_order_pde_loss_with_mixed_bc(
+        N,
+        x_domain_lower_bound=0, 
+        x_domain_upper_bound=1,
+        y_domain_lower_bound=0, 
+        y_domain_upper_bound=1, 
+        num_points=10
+):
+
+    h = 1e-2
+     # Create a grid of x and y values using torch.meshgrid
+    x_values = torch.linspace(x_domain_lower_bound, x_domain_upper_bound, num_points, requires_grad=True)
+    y_values = torch.linspace(y_domain_lower_bound, y_domain_upper_bound, num_points, requires_grad=True)
+    X, Y = torch.meshgrid(x_values, y_values, indexing='ij')
+
+    # Flatten the grid to pass to the network
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+
+    # Define the function B(x, y)
+    def B(x, y):
+        result = 2 * y * torch.sin(torch.pi * x)
+        return result
+
+    # Compute the derivative of the neural network with respect to y
+    dN_dy = lambda x, y: (N(x, y + 1e-3) - N(x, y)) / 1e-3
+
+    # Define the trial solution using the neural network and B(x, y)
+    def trial_solution(x, y):
+        result = B(x, y).squeeze() + x * (1 - x) * y * (N(x, y).squeeze() - N(x, torch.ones_like(y)).squeeze() - dN_dy(x, torch.ones_like(y)).squeeze())
+        return result
+
+    # Compute the Laplacian using finite differences
+    f_xx = (trial_solution(X_flat + h, Y_flat) - 2 * trial_solution(X_flat, Y_flat) + trial_solution(X_flat - h, Y_flat)) / h**2
+    f_yy = (trial_solution(X_flat, Y_flat + h) - 2 * trial_solution(X_flat, Y_flat) + trial_solution(X_flat, Y_flat - h)) / h**2
+    laplacian = f_xx + f_yy
+
+    # Calculate the individual error at each grid point
+    individual_error = (laplacian - torch.sin(torch.pi * X_flat) * (2 - (torch.pi**2) * (Y_flat**2)))**2
+
+    # Sum the errors to get the total loss
+    return torch.sum(individual_error)
+
+
+def second_order_nonlinear_pde_loss_with_mixed_bc(N,x_domain_lower_bound=0, x_domain_upper_bound=1,y_domain_lower_bound=0, y_domain_upper_bound=1, num_points=10):
+    """Computes loss for a given N
+
+    Parameters
+    ----------
+    nerual_network : torch.N.Module
+        Neural network used in trial solution
+    a: function
+        Function of coefficient in first-order linear DE
+    g : function
+        Function on right-hand side of DE
+    ic : float
+        Initial condition of DE
+    domain_lower_bout : float, optional
+        Lower limit of the DE domain considered
+    domain_upper_bound : float, optional
+        Upper limit of the DE domain considered
+    num_points : int, optional
+        Number of points in which to split the domain
+    
+    Returns
+    -------
+    torch.tensor
+        resulting loss of trial solution in it's current state
+    """
+    h = 1e-2
+     # Create a grid of x and y values using torch.meshgrid
+    x_values = torch.linspace(x_domain_lower_bound, x_domain_upper_bound, num_points, requires_grad=True)
+    y_values = torch.linspace(y_domain_lower_bound, y_domain_upper_bound, num_points, requires_grad=True)
+    X, Y = torch.meshgrid(x_values, y_values, indexing='ij')
+
+    # Flatten the grid to pass to the network
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+
+    # Define the function B(x, y)
+    def B(x, y):
+        result = 2 * y * torch.sin(torch.pi * x)
+        return result
+
+    # Compute the derivative of the neural network with respect to y
+    dN_dy = lambda x, y: (N(x, y + 1e-3) - N(x, y)) / 1e-3
+
+    # Define the trial solution using the neural network and B(x, y)
+    def trial_solution(x, y):
+        result = B(x, y).squeeze() + x * (1 - x) * y * (N(x, y).squeeze() - N(x, torch.ones_like(y)).squeeze() - dN_dy(x, torch.ones_like(y)).squeeze())
+        return result
+
+    # Compute the Laplacian using finite differences
+    f_xx = (trial_solution(X_flat + h, Y_flat) - 2 * trial_solution(X_flat, Y_flat) + trial_solution(X_flat - h, Y_flat)) / h**2
+    f_yy = (trial_solution(X_flat, Y_flat + h) - 2 * trial_solution(X_flat, Y_flat) + trial_solution(X_flat, Y_flat - h)) / h**2
+    dtrial_dy=(trial_solution(X_flat,Y_flat+h)-trial_solution(X_flat,Y_flat))/h
+    laplacian = f_xx + f_yy
+
+    # Calculate the individual error at each grid point
+    individual_error = (laplacian + trial_solution(X_flat, Y_flat)*dtrial_dy - torch.sin(torch.pi*X_flat)*(2-(torch.pi**2)*(Y_flat**2) + 2*Y_flat**3*torch.sin(torch.pi*X_flat)))**2
+
     # Sum the errors to get the total loss
     return torch.sum(individual_error)
