@@ -155,38 +155,69 @@ def evaluate_trial_solution_on_grid(trial_fun, N, X, Y):
 
     return Z_trial
 
-
-# ==================================================
-# Plot: exact solution wireframe
-# ==================================================
-def plot_pde_exact_wireframe(
+# ====================================================================================================
+# 2.2.1 Plot: exact vs trial surface comparison (Plotly)
+# ====================================================================================================
+def plot_pde_surface_comparison_plotly(
     exact_fun,
-    num_points=30,
-    x_min=0, x_max=1,
-    y_min=0, y_max=1,
-    title='Exact solution',
-    elev=18,
-    azim=-58
+    trial_fun,
+    N,
+    num_points=100,
+    x_min=0,
+    x_max=1,
+    y_min=0,
+    y_max=1,
+    title='Exact vs trial solution'
 ):
     X, Y = build_pde_grid(x_min, x_max, y_min, y_max, num_points)
+
     Z_exact = exact_fun(X, Y)
+    Z_trial = evaluate_trial_solution_on_grid(trial_fun, N, X, Y)
 
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot_wireframe(X, Y, Z_exact, color='black', linewidth=0.8)
+    print(f"{title} - max abs error: {np.max(np.abs(Z_trial - Z_exact)):.6e}")
+    print(f"{title} - Z_exact shape: {Z_exact.shape}")
+    print(f"{title} - Z_trial shape: {Z_trial.shape}")
 
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('Solution')
-    ax.set_title(title)
-    ax.view_init(elev=elev, azim=azim)
+    fig = go.Figure()
 
-    plt.show()
+    fig.add_trace(
+        go.Surface(
+            z=Z_exact,
+            x=X,
+            y=Y,
+            colorscale='Viridis',
+            name='Exact Solution'
+        )
+    )
+
+    fig.add_trace(
+        go.Surface(
+            z=Z_trial,
+            x=X,
+            y=Y,
+            colorscale='Reds',
+            name='Trial Solution',
+            opacity=0.6
+        )
+    )
+
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis_title='X axis',
+            yaxis_title='Y axis',
+            zaxis_title='Z axis'
+        ),
+        width=1000,
+        height=1000
+    )
+
+    fig.show()
 
 
-# ==================================================
-# Plot: error wireframe
-# ==================================================
+# ====================================================================================================
+# 2.2.2 Plot: error wireframe
+# ====================================================================================================
 def plot_pde_error_wireframe(
     exact_fun,
     trial_fun,
@@ -221,6 +252,35 @@ def plot_pde_error_wireframe(
 
     plt.show()
 
+# ====================================================================================================
+# Backup: exact vs trial surface comparison (Matplotlib)
+# ====================================================================================================
+# ==================================================
+# Plot: exact solution wireframe
+# ==================================================
+def plot_pde_exact_wireframe(
+    exact_fun,
+    num_points=30,
+    x_min=0, x_max=1,
+    y_min=0, y_max=1,
+    title='Exact solution',
+    elev=18,
+    azim=-58
+):
+    X, Y = build_pde_grid(x_min, x_max, y_min, y_max, num_points)
+    Z_exact = exact_fun(X, Y)
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_wireframe(X, Y, Z_exact, color='black', linewidth=0.8)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('Solution')
+    ax.set_title(title)
+    ax.view_init(elev=elev, azim=azim)
+
+    plt.show()
 
 # ==================================================
 # Plot: exact vs trial surface comparison
