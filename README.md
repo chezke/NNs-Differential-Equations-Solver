@@ -1,4 +1,7 @@
 # NNs-Differential-Equations-Solver
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chezke/NNs-Differential-Equations-Solver/blob/main/illustration.ipynb)
+
 Neural network methods for solving differential equations (ODE/PDE).
 
 This repository implements neural-network-based methods for solving ordinary and partial differential equations, following the ideas of Lagaris et al.
